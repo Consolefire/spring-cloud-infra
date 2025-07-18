@@ -1,0 +1,24 @@
+server:
+  port: 9889
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8770/eureka/
+
+
+spring:
+  application:
+    name: test01
+  cloud:
+    config:
+      fail-fast: true
+      discovery:
+        enabled: true
+        service-id: config-service
+      name: test-server-01
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lowerCaseServiceId: true
