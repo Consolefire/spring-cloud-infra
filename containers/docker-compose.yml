@@ -1,0 +1,109 @@
+name: spcli
+
+networks:
+  spcli-net:
+    name: spcli-net
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+services:
+
+  # ==========================================
+  # Database
+  # ==========================================
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: postgres-db
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+#    ports:
+#      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    networks:
+      - spcli-net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: always
+    ports:
+      - "8797:8080"
+    networks:
+      - spcli-net
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+
+
+  # =====================================================================
+  # SCENARIO 1: Local Standalone Profile
+  # Run with: docker compose --profile local up
+  # =====================================================================
+  authorization-server-local:
+    image: consolefire/spring-cloud-authorization-server:0.1.0-SNAPSHOT_jdk27
+    container_name: authorization-server-local
+    profiles:
+      - local
+    ports:
+      - "19000:9000"
+    networks:
+      - spcli-net
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - DB_URL=jdbc:postgresql://postgres-db:5432/${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASS}
+    depends_on:
+      - postgres-db
+
+  user-service-local:
+    image: consolefire/spring-cloud-user-service:0.1.0-SNAPSHOT_jdk27
+    container_name: user-service-local
+    profiles:
+      - local
+    ports:
+      - "18081:8081"
+    networks:
+      - spcli-net
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - DB_URL=jdbc:postgresql://postgres-db:5432/${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASS}
+    depends_on:
+      - postgres-db
+
+  api-gateway-local:
+    image: consolefire/spring-cloud-api-gateway:0.1.0-SNAPSHOT_jdk27
+    container_name: api-gateway-local
+    profiles:
+      - local
+    ports:
+      - "18000:8000"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+      - DISCOVERY_INSTANCE_HOSTNAME=api-gateway-local
+    depends_on:
+      - authorization-server-local
+      - user-service-local

@@ -1,0 +1,196 @@
+version: '3.8'
+
+networks:
+  spcli-net:
+    driver: bridge
+
+services:
+  # ==========================================
+  # Shared Infrastructure: Service Discovery
+  # ==========================================
+  discovery-server:
+    image: consolefire/spring-cloud-discovery-server:0.1.0-SNAPSHOT_jdk27
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - DISCOVERY_INSTANCE_HOSTNAME=discovery-server
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+
+  # ==========================================
+  # Shared Infrastructure: Config Server (Cloud Profile)
+  # ==========================================
+  config-server:
+    image: consolefire/spring-cloud-config-server:0.1.0-SNAPSHOT_jdk27
+    container_name: config-server
+    profiles:
+      - cloud
+    ports:
+      - "8660:8660"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=native
+      - CONFIG_SERVER_PORT=8660
+    depends_on:
+      - discovery-server
+
+  # ==========================================
+  # Databases
+  # ==========================================
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: postgres-auth
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - spcli-net
+
+  postgres-user:
+    image: postgres:16-alpine
+    container_name: postgres-user
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    networks:
+      - spcli-net
+
+  # =====================================================================
+  # SCENARIO 1: Local Standalone Profile
+  # Run with: docker compose --profile local up
+  # =====================================================================
+  authorization-server-local:
+    image: consolefire/spring-cloud-authorization-server:0.1.0-SNAPSHOT_jdk27
+    container_name: authorization-server-local
+    profiles:
+      - local
+    ports:
+      - "9000:9000"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=default
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+      - DB_URL=jdbc:postgresql://postgres-auth:5432/authdb
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - AUTH_SERVER_ISSUER_URI=http://localhost:9000
+    depends_on:
+      - discovery-server
+      - postgres-auth
+
+  user-service-local:
+    image: consolefire/spring-cloud-user-service:0.1.0-SNAPSHOT_jdk27
+    container_name: user-service-local
+    profiles:
+      - local
+    ports:
+      - "8081:8081"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=default,secured-with-oauth2,with-eureka-discovery
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+      - DB_URL=jdbc:postgresql://postgres-user:5432/userdb
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      - discovery-server
+      - postgres-user
+
+  api-gateway-local:
+    image: consolefire/spring-cloud-api-gateway:0.1.0-SNAPSHOT_jdk27
+    container_name: api-gateway-local
+    profiles:
+      - local
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=default,secured-with-oauth2,with-eureka-discovery
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+      - DISCOVERY_INSTANCE_HOSTNAME=api-gateway-local
+    depends_on:
+      - discovery-server
+      - authorization-server-local
+      - user-service-local
+
+  # =====================================================================
+  # SCENARIO 2: Cloud Config + Discovery Profile
+  # Run with: docker compose --profile cloud up
+  # =====================================================================
+  authorization-server-cloud:
+    image: consolefire/spring-cloud-authorization-server:0.1.0-SNAPSHOT_jdk27
+    container_name: authorization-server-cloud
+    profiles:
+      - cloud
+    ports:
+      - "9000:9000"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=with-cloud-config
+      - CONFIG_SERVER_URL=http://config-server:8660
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+      - DB_URL=jdbc:postgresql://postgres-auth:5432/authdb
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - AUTH_SERVER_ISSUER_URI=http://localhost:9000
+    depends_on:
+      - config-server
+      - discovery-server
+      - postgres-auth
+
+  user-service-cloud:
+    image: consolefire/spring-cloud-user-service:0.1.0-SNAPSHOT_jdk27
+    container_name: user-service-cloud
+    profiles:
+      - cloud
+    ports:
+      - "8081:8081"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=with-cloud-config
+      - CONFIG_SERVER_URL=http://config-server:8660
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+      - DB_URL=jdbc:postgresql://postgres-user:5432/userdb
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      - config-server
+      - discovery-server
+      - postgres-user
+
+  api-gateway-cloud:
+    image: consolefire/spring-cloud-api-gateway:0.1.0-SNAPSHOT_jdk27
+    container_name: api-gateway-cloud
+    profiles:
+      - cloud
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    networks:
+      - spcli-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=with-cloud-config,with-eureka-discovery
+      - CONFIG_SERVER_URL=http://config-server:8660
+      - DISCOVERY_SERVER_URL=http://discovery-server:8761/eureka/
+      - DISCOVERY_INSTANCE_HOSTNAME=api-gateway-cloud
+    depends_on:
+      - config-server
+      - discovery-server
+      - authorization-server-cloud
+      - user-service-cloud

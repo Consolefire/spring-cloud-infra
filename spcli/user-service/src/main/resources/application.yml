@@ -1,0 +1,105 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME:user-service}
+
+  # Default Database Configuration (PostgreSQL via JDBC)
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/userdb}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    create-schema: ${FLYWAY_CREATE_SCHEMA:true}
+
+  cloud:
+    config:
+      enabled: false # Completely disables config client and import checks in default mode
+
+  config:
+    # DEFAULT MODE: Independent of Config Server
+    import: "optional:file:${USER_CONFIG_PATH:/etc/userservice/config.yml}"
+
+# Eureka client disabled by default in standalone mode
+eureka:
+  client:
+    enabled: false
+
+management:
+  server:
+    port: ${MGMT_SERVER_PORT:9091}
+  endpoints:
+    web:
+      base-path: ${MGMT_BASE_PATH:/ctrl-tower}
+      exposure:
+        include: health, info, metrics, prometheus, refresh
+
+---
+# =====================================================================
+# PROFILE: with-eureka-discovery
+# Activated via: -Dspring.profiles.active=with-eureka-discovery
+# =====================================================================
+spring:
+  config:
+    activate:
+      on-profile: with-eureka-discovery
+
+eureka:
+  client:
+    enabled: ${DISCOVERY_ENABLED:true}
+    register-with-eureka: true
+    fetch-registry: true
+    serviceUrl:
+      defaultZone: ${DISCOVERY_SERVER_URL:http://localhost:8761/eureka/}
+  instance:
+    hostname: ${DISCOVERY_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: ${DISCOVERY_INSTANCE_PREFER_IP:true}
+
+---
+# =====================================================================
+# PROFILE: with-cloud-config
+# Activated via: -Dspring.profiles.active=with-cloud-config
+# =====================================================================
+spring:
+  config:
+    activate:
+      on-profile: with-cloud-config
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://config-server.internal:8888}"
+  cloud:
+    config:
+      fail-fast: true
+      retry:
+        max-attempts: 6
+        initial-interval: 2000
+        multiplier: 1.5
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus, gateway, refresh, busrefresh
+
+---
+# =====================================================================
+# PROFILE: secured-with-oauth2
+# Activated via: -Dspring.profiles.active=secured-with-oauth2
+# =====================================================================
+spring:
+  config:
+    activate:
+      on-profile: secured-with-oauth2
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:https://your-auth-server.com/realms/your-realm}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus, refresh

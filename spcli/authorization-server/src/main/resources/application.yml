@@ -1,0 +1,55 @@
+server:
+  port: ${AUTH_SERVER_PORT:9000}
+
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME:auth-server}
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/authdb}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+eureka:
+  client:
+    enabled: ${DISCOVERY_ENABLED:true}
+    register-with-eureka: true
+    fetch-registry: true
+    serviceUrl:
+      defaultZone: ${DISCOVERY_SERVER_URL:http://localhost:8761/eureka/}
+  instance:
+    hostname: ${DISCOVERY_INSTANCE_HOSTNAME:localhost}
+
+auth-server:
+  issuer-uri: ${AUTH_SERVER_ISSUER_URI:http://localhost:9000}
+
+gateway:
+  services:
+    user-service:
+      name: ${USER_SERVICE_NAME:user-service}
+      path-prefix: ${USER_SERVICE_PATH_PREFIX:/api/v1/users}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: default
+  cloud:
+    config:
+      enabled: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: with-cloud-config
+      import: configserver:${CONFIG_SERVER_URL:http://localhost:8660/}
+  cloud:
+    config:
+      enabled: true
+      uri: ${CONFIG_SERVER_URL:http://localhost:8660/,http://localhost:8661/}
+      multiple-uri-strategy: connection-timeout-only
+      fail-fast: true
+      label: ${CONFIG_REPO_BRANCH_NAME:main}

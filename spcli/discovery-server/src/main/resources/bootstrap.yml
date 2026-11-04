@@ -1,0 +1,5 @@
+spring:
+  application:
+    name: ${APPLICATION_NAME:discovery-server}
+  config:
+    additional-location: ${ADDL_SPRING_CFG_LOCATION:""}

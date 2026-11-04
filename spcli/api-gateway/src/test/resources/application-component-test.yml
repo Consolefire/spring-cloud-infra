@@ -1,0 +1,17 @@
+eureka:
+  client:
+    enabled: false
+
+spring:
+  application:
+    name: Test
+  cloud:
+    config:
+      enabled: false       # Completely disables the config client for tests
+      # OR:
+      # import-check:
+      #   enabled: false   # Disables only the startup import validation check
+    bus:
+      enabled: false
+  config:
+    import: "optional:file:test-routes.yml"

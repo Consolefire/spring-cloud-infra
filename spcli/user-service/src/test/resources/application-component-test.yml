@@ -1,0 +1,22 @@
+eureka:
+  client:
+    enabled: false
+
+spring:
+  application:
+    name: user-service-test
+  cloud:
+    config:
+      enabled: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      base-path: /ctrl-tower
+      exposure:
+        include: health, info
